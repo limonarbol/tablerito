@@ -1,1 +1,231 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>𓍢ִ໋🌷͙֒ nuestro tablerito</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>📌</text></svg>">
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; padding: 0;
+            background-color: #faf8f5;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #786460;
+            min-height: 100vh;
+            overflow: hidden; /* Evita scrolls raros al arrastrar */
+            position: relative;
+            display: flex; flex-direction: column; align-items: center;
+        }
+
+        /* Panel superior de control estético */
+        .panel-control {
+            position: fixed; top: 15px; left: 50%; transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+            padding: 12px 20px; border-radius: 20px;
+            box-shadow: 0px 4px 15px rgba(120, 100, 96, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            z-index: 100; display: flex; gap: 10px; align-items: center;
+            width: 90%; max-width: 650px;
+        }
+        .panel-control input {
+            flex: 1; background: #ffffff; border: 1px solid #fbcfe8; padding: 10px 14px;
+            border-radius: 12px; color: #786460; outline: none; font-size: 0.9rem;
+        }
+        .panel-control select {
+            background: #ffffff; border: 1px solid #fbcfe8; padding: 10px;
+            border-radius: 12px; color: #786460; outline: none; font-size: 0.9rem;
+        }
+        .panel-control button {
+            background: #786460; color: #ffffff; border: none; padding: 10px 20px;
+            border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 0.9rem;
+            transition: opacity 0.2s;
+        }
+        .panel-control button:hover { opacity: 0.9; }
+
+        /* EL TABLERO DE CORCHO COMPLETO */
+        #tablero {
+            width: 95vw; height: calc(100vh - 100px); margin-top: 85px; border-radius: 24px;
+            /* SUBE UNA IMAGEN LLAMADA corcho.jpg A TU REPO PARA VER LA TEXTURA */
+            background: url('corcho.jpg') repeat center center;
+            background-color: #bc8f8f;
+            box-shadow: inset 0px 4px 20px rgba(0,0,0,0.4), 0px 8px 25px rgba(0,0,0,0.15);
+            position: relative; overflow: hidden;
+            border: 12px solid #ecd5c5; /* Marco de madera clarito */
+        }
+
+        .elemento-tablero {
+            position: absolute; cursor: move; user-select: none; touch-action: none; z-index: 5;
+        }
+        
+        /* Chinche / Pin decorativo rojo */
+        .elemento-tablero::before {
+            content: ''; position: absolute; top: -6px; left: 50%; transform: translateX(-50%);
+            width: 12px; height: 12px; background: #ef4444; border-radius: 50%;
+            box-shadow: 0px 2px 3px rgba(0,0,0,0.3), inset -2px -2px 3px rgba(0,0,0,0.2);
+            z-index: 10;
+        }
+
+        /* Post-its con sombras pesadas */
+        .nota-tablero {
+            padding: 15px; width: 150px; min-height: 110px;
+            box-shadow: 4px 6px 12px rgba(0, 0, 0, 0.3);
+            font-size: 0.85rem; font-weight: 500; line-height: 1.3; word-break: break-word;
+        }
+        .t-rosa { background: #fbcfe8; color: #786460; }
+        .t-amarillo { background: #fef08a; color: #52422d; }
+        .t-azul { background: #bae6fd; color: #2c4a5e; }
+
+        /* Polaroid / Recortes */
+        .polaroid-tablero {
+            background: #ffffff; padding: 8px 8px 22px 8px;
+            box-shadow: 5px 8px 15px rgba(0, 0, 0, 0.35); width: 140px; text-align: center;
+        }
+        .polaroid-tablero img { width: 124px; height: 124px; object-fit: cover; background: #eee; }
+
+        /* Botón discreto para quitar elementos */
+        .btn-borrar-nodo {
+            position: absolute; bottom: 4px; right: 4px; background: rgba(239, 68, 68, 0.8); color: white; border: none;
+            width: 16px; height: 16px; border-radius: 50%; font-size: 9px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; z-index: 12;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="panel-control">
+        <input type="text" id="input-tablero" placeholder="Escribe una nota o pega link de foto...">
+        <select id="select-tablero">
+            <option value="rosa">Nota Rosa 🌸</option>
+            <option value="amarillo">Nota Amarilla ✨</option>
+            <option value="azul">Nota Azul 🐳</option>
+            <option value="polaroid">Foto Polaroid 📸</option>
+        </select>
+        <button id="btn-tablero">Fijar pin 📌</button>
+    </div>
+
+    <div id="tablero"></div>
+
+    <script>
+        const miNombre = prompt("Introduce tu nombre:") || "Invitada";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyB_en_iCNtBhIyDczHAka1oxUel6c7hvbo",
+            authDomain: "cinecito-c36b3.firebaseapp.com",
+            databaseURL: "https://cinecito-c36b3-default-rtdb.firebaseio.com",
+            projectId: "cinecito-c36b3",
+            storageBucket: "cinecito-c36b3.appspot.com",
+            messagingSenderId: "41821063218",
+            appId: "1:41821063218:web:a18b16f0ca4f003167142b"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        // Usamos una ruta limpia llamada 'tablerito'
+        const tableroRef = database.ref('cine/tablerito'); 
+
+        document.getElementById('btn-tablero').addEventListener('click', agregarAlTablero);
+
+        function agregarAlTablero() {
+            const contenido = document.getElementById('input-tablero').value.trim();
+            if (!contenido) return;
+
+            const tipo = document.getElementById('select-tablero').value;
+            const corcho = document.getElementById('tablero');
+            
+            const xMax = corcho.clientWidth - 160;
+            const yMax = corcho.clientHeight - 160;
+            const x = Math.floor(Math.random() * Math.max(xMax, 50)) + 20;
+            const y = Math.floor(Math.random() * Math.max(yMax, 50)) + 20;
+            const rotacion = Math.floor(Math.random() * 20) - 10; 
+
+            tableroRef.push({ contenido: contenido, tipo: tipo, x: x, y: y, rotacion: rotacion });
+            document.getElementById('input-tablero').value = "";
+        }
+
+        tableroRef.on('child_added', (snapshot) => {
+            crearElementoTablero(snapshot.key, snapshot.val());
+        });
+
+        tableroRef.on('child_changed', (snapshot) => {
+            const el = document.getElementById('pin-' + snapshot.key);
+            if (el && !el.classList.contains('moviendo')) {
+                const data = snapshot.val();
+                el.style.left = data.x + 'px';
+                el.style.top = data.y + 'px';
+            }
+        });
+
+        tableroRef.on('child_removed', (snapshot) => {
+            const el = document.getElementById('pin-' + snapshot.key);
+            if (el) el.remove();
+        });
+
+        function crearElementoTablero(id, data) {
+            const nodo = document.createElement('div');
+            nodo.id = 'pin-' + id;
+            nodo.className = 'elemento-tablero';
+            nodo.style.left = data.x + 'px';
+            nodo.style.top = data.y + 'px';
+            nodo.style.transform = `rotate(${data.rotacion}deg)`;
+
+            if (data.tipo === 'polaroid') {
+                nodo.innerHTML = `<div class="polaroid-tablero"><img src="${data.contenido}" alt="Scrap"></div>`;
+            } else {
+                nodo.innerHTML = `<div class="nota-tablero t-${data.tipo}">${data.contenido}</div>`;
+            }
+
+            const btnBorrar = document.createElement('button');
+            btnBorrar.className = 'btn-borrar-nodo';
+            btnBorrar.innerText = '✕';
+            btnBorrar.onclick = (e) => { e.stopPropagation(); tableroRef.child(id).remove(); };
+            nodo.appendChild(btnBorrar);
+
+            document.getElementById('tablero').appendChild(nodo);
+            activarArrastreCorcho(nodo, id);
+        }
+
+        function activarArrastreCorcho(el, id) {
+            let shiftX, shiftY;
+            const corcho = document.getElementById('tablero');
+
+            el.onpointerdown = function(e) {
+                e.preventDefault();
+                el.classList.add('moviendo');
+                
+                const rect = el.getBoundingClientRect();
+                shiftX = e.clientX - rect.left;
+                shiftY = e.clientY - rect.top;
+
+                document.onpointermove = unPointerMove;
+                document.onpointerup = unPointerUp;
+            };
+
+            function unPointerMove(e) {
+                const corchoRect = corcho.getBoundingClientRect();
+                let x = e.clientX - corchoRect.left - shiftX;
+                let y = e.clientY - corchoRect.top - shiftY;
+
+                x = Math.max(5, Math.min(x, corcho.clientWidth - el.clientWidth - 5));
+                y = Math.max(5, Math.min(y, corcho.clientHeight - el.clientHeight - 5));
+
+                el.style.left = x + 'px';
+                el.style.top = y + 'px';
+            }
+
+            function unPointerUp() {
+                el.classList.remove('moviendo');
+                document.onpointermove = null;
+                document.onpointerup = null;
+
+                tableroRef.child(id).update({ x: parseInt(el.style.left), y: parseInt(el.style.top) });
+            }
+        }
+    </script>
+</body>
+</html>
